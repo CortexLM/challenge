@@ -1,0 +1,74 @@
+from __future__ import annotations
+
+import asyncio
+import os
+
+from ..challenge import Context
+
+
+def _register_lifecycle_defaults() -> None:
+    pass
+
+
+async def _run_async_server() -> None:
+    """Async runtime logic for WS server mode."""
+    _register_lifecycle_defaults()
+    # WS server mode: just start the FastAPI server
+    # Validator will connect via WebSocket and initiate attestation
+    from ..api.server import init_app, set_ready
+    from ..challenge.decorators import challenge
+
+    # Check dev mode for local DB initialization
+    dev_mode = os.getenv("SDK_DEV_MODE", "").lower() == "true"
+    if dev_mode:
+        import logging
+
+        from ..dev.local_db import init_local_db_if_needed, run_dev_migrations_if_possible
+
+        logger = logging.getLogger(__name__)
+
+        # Try to initialize local DB if DEV_DB_URL is provided
+        db_manager = await init_local_db_if_needed()
+        if db_manager:
+            logger.info("🔧 DEV MODE: Using local database connection")
+        else:
+            # Even without DEV_DB_URL, try to run migrations if a default DB is available
+            # This allows migrations to run in dev mode without explicit DB URL
+            await run_dev_migrations_if_possible()
+
+    app = await init_app(challenge, challenge.api)
+    await set_ready()
+
+    import uvicorn
+
+    # Allow custom port in dev mode
+    port = int(os.getenv("SDK_PORT", "10000"))
+    host = os.getenv("SDK_HOST", "0.0.0.0")  # noqa: S104
+
+    if dev_mode:
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.info(f"🔧 DEV MODE: Starting server on {host}:{port}")
+
+    config = uvicorn.Config(app, host=host, port=port)
+    server = uvicorn.Server(config)
+    await server.serve()
+
+
+async def _run_async(ctx: Context) -> None:
+    """Async runtime logic."""
+    _register_lifecycle_defaults()
+    # mTLS server removed - encryption now handled via X25519/XChaCha20-Poly1305
+
+
+def run() -> None:
+    """Main entry point for challenge runtime.
+
+    The challenge always runs as a WebSocket server, regardless of CHALLENGE_ADMIN.
+    CHALLENGE_ADMIN determines capabilities:
+    - CHALLENGE_ADMIN=true: Migrations, ORM write, public endpoints (for platform-api)
+    - CHALLENGE_ADMIN=false/absent: ORM read-only bridge, no migrations, no public endpoints (for platform-validator)
+    """
+    # Always run as WebSocket server (both platform-api and platform-validator connect to challenge)
+    asyncio.run(_run_async_server())
