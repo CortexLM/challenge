@@ -1,0 +1,230 @@
+from __future__ import annotations
+
+import asyncio
+from typing import Any
+
+from fastapi import FastAPI, WebSocket
+
+from .health import sdk_health
+from .routes_admin import sdk_admin_db_credentials
+from .routes_public import sdk_public, sdk_weights
+from .security import validate_client_cert
+
+_is_ready: bool = False
+lifecycle: Any = None
+api: Any = None
+
+
+async def set_ready() -> None:
+    """Mark challenge as ready and trigger on_ready lifecycle hook."""
+    global _is_ready
+    _is_ready = True
+    if lifecycle and lifecycle.on_ready:
+        res = lifecycle.on_ready()
+        if asyncio.iscoroutine(res):
+            await res
+
+
+async def init_app(lifecycle_registry: Any, api_registry: Any) -> FastAPI:
+    """Initialize FastAPI application with SDK endpoints and lifecycle management.
+
+    CHALLENGE_ADMIN determines available endpoints:
+    - CHALLENGE_ADMIN=true: Public endpoints and admin handlers are registered
+    - CHALLENGE_ADMIN=false/absent: Only WebSocket and health endpoints
+    """
+    global lifecycle, api
+    lifecycle = lifecycle_registry
+    api = api_registry
+
+    app = FastAPI()
+
+    # Log dev mode status
+    import os
+
+    dev_mode = os.getenv("SDK_DEV_MODE", "").lower() == "true"
+    if dev_mode:
+        import logging
+
+        logging.warning("🔧 DEV MODE ENABLED: Security checks bypassed, TDX attestation disabled")
+
+    app.middleware("http")(validate_client_cert)
+
+    @app.on_event("startup")
+    async def on_startup():
+        if lifecycle and lifecycle.on_startup:
+            res = lifecycle.on_startup()
+            if asyncio.iscoroutine(res):
+                await res
+
+    app.get("/sdk/health")(sdk_health)
+    app.post("/sdk/weights")(sdk_weights)
+
+    # Check CHALLENGE_ADMIN to determine if public endpoints should be registered
+    import os
+
+    challenge_admin = os.getenv("CHALLENGE_ADMIN", "").lower() == "true"
+
+    if challenge_admin:
+        # Admin mode: Register public endpoints and admin handlers
+        app.post("/sdk/public/{name}")(sdk_public)
+        app.post("/sdk/admin/db/credentials")(sdk_admin_db_credentials)
+
+        # Register admin endpoints from api_registry
+        # Admin endpoints can be registered via @challenge.api.admin("name")
+        if api_registry and hasattr(api_registry, "admin_handlers"):
+            admin_handlers = getattr(api_registry, "admin_handlers", {})
+            for name, handler in admin_handlers.items():
+                # Support both GET and POST (use GET for migrations)
+                app.get(f"/sdk/admin/{name}")(handler)
+                app.post(f"/sdk/admin/{name}")(handler)
+    else:
+        # Non-admin mode: No public endpoints or admin handlers
+        # Only WebSocket and health endpoints are available
+        pass
+
+    # Minimal WS endpoint; actual handshake implemented in transport.ws
+    @app.websocket("/sdk/ws")
+    async def sdk_ws(websocket: WebSocket):
+        await websocket.accept()
+        # Defer to transport implementation via a simple adapter
+        try:
+            import os
+
+            from ..transport.ws import serve_ws  # type: ignore
+
+            # Check dev mode
+            dev_mode = os.getenv("SDK_DEV_MODE", "").lower() == "true"
+
+            async def quote_provider(report_data: bytes):
+                import logging
+                import secrets
+
+                # Dev mode: generate fake quote
+                if dev_mode:
+                    logging.info("🔧 DEV MODE: Generating fake TDX quote (no verification)")
+                    # Generate a fake quote of appropriate size (TDX quotes are typically 1000+ bytes)
+                    fake_quote = secrets.token_bytes(1024)
+                    fake_event_log = '{"dev_mode": true, "compose-hash": "dev-mode-fake"}'
+                    fake_rtmrs = {
+                        "rtmr0": secrets.token_bytes(48).hex(),
+                        "rtmr1": secrets.token_bytes(48).hex(),
+                        "rtmr2": secrets.token_bytes(48).hex(),
+                        "rtmr3": secrets.token_bytes(48).hex(),
+                    }
+                    logging.info(f"🔧 DEV MODE: Fake quote generated ({len(fake_quote)} bytes)")
+                    return fake_quote, fake_event_log, fake_rtmrs
+
+                # Production mode: use real TDX quote
+                try:
+                    from dstack_sdk import AsyncDstackClient  # type: ignore
+
+                    logging.info(
+                        f"quote_provider called with report_data (len={len(report_data)} bytes)"
+                    )
+
+                    client = AsyncDstackClient()
+                    qr = await client.get_quote(report_data)
+
+                    # Check compose-hash presence in event log
+                    try:
+                        evlog = qr.event_log or ""
+                        if isinstance(evlog, str):
+                            if '"compose-hash"' in evlog or '"upgraded-app-id"' in evlog:
+                                logging.info("Event log contains compose-hash/upgraded-app-id")
+                            else:
+                                logging.warning(
+                                    "Event log missing compose-hash (Platform-API may show UNKNOWN)"
+                                )
+                    except Exception:
+                        # Event log parsing failed, non-critical
+                        pass
+
+                    # Log that report_data was received (but not the actual data)
+                    if hasattr(qr, "report_data") and qr.report_data:
+                        logging.info(
+                            f"Report_data received from dstack SDK (len={len(qr.report_data) if isinstance(qr.report_data, str) else 'N/A'} chars)"
+                        )
+
+                    # Quote should be bytes or hex string - ensure it's bytes
+                    quote = qr.quote
+                    quote_len = len(quote) if quote else 0
+                    logging.info(f"Quote received: {quote_len} bytes")
+                    if isinstance(quote, str):
+                        import binascii
+
+                        # Try to decode as hex if it looks like hex
+                        if all(c in "0123456789abcdefABCDEF" for c in quote.replace(" ", "")):
+                            quote = binascii.unhexlify(quote.replace(" ", ""))
+                        else:
+                            quote = quote.encode("utf-8")
+
+                    # Log quote for debugging
+                    if quote:
+                        import binascii
+
+                        quote_hex = binascii.hexlify(quote).decode("ascii")
+                        logging.info(
+                            f"Quote received from dstack SDK: {len(quote)} bytes, hex (first 128 chars): {quote_hex[:128]}"
+                        )
+
+                        # (Debug) Extract a sample report_data slice; validator performs robust offset matching
+                        if len(quote) >= 608:
+                            report_data_in_quote_bytes = quote[576:608]
+                            report_data_in_quote_hex = binascii.hexlify(
+                                report_data_in_quote_bytes
+                            ).decode("ascii")
+                            logging.info(
+                                f"Report_data sample from quote (offset 576): {report_data_in_quote_hex}"
+                            )
+                    else:
+                        logging.warning("Quote is empty from dstack SDK")
+
+                    # Verify quote is not empty
+                    if not quote or len(quote) < 100:
+                        logging.warning(
+                            f"Quote is too short or empty: {len(quote) if quote else 0} bytes"
+                        )
+                        return b"", None, None
+
+                    rtmrs = {}
+                    try:
+                        arr = qr.replay_rtmrs()  # replay_rtmrs is synchronous, not async
+                        if isinstance(arr, (list, tuple)):
+                            rtmrs = {
+                                "rtmr0": arr[0] if len(arr) > 0 else None,
+                                "rtmr1": arr[1] if len(arr) > 1 else None,
+                                "rtmr2": arr[2] if len(arr) > 2 else None,
+                                "rtmr3": arr[3] if len(arr) > 3 else None,
+                            }
+                    except Exception as e:
+                        logging.debug(f"Could not get RTMRs: {e}")
+
+                    logging.info(
+                        f"Quote ready: {len(quote)} bytes, event_log present: {bool(qr.event_log)}"
+                    )
+                    return quote, qr.event_log, rtmrs
+                except Exception as e:
+                    import logging
+
+                    logging.error(f"Failed to get quote from dstack SDK: {e}", exc_info=True)
+                    # No quote available in dev mode
+                    return b"", None, None
+
+            await serve_ws(websocket, "/sdk/ws", quote_provider)
+        except Exception as e:
+            # Log the error but don't try to close if already closed
+            import logging
+
+            logging.error(f"WebSocket error: {e}", exc_info=True)
+        finally:
+            # Only close if still connected
+            try:
+                await websocket.close()
+            except Exception:
+                # WebSocket already closed or close failed, safe to ignore
+                pass
+
+    return app
+
+
+sdk_app = FastAPI()

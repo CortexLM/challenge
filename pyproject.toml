@@ -36,6 +36,7 @@ dev = [
 
 [tool.hatchling.build.targets.wheel]
 packages = ["src/platform_challenge_sdk"]
+only-include = ["src/platform_challenge_sdk"]
 
 [tool.black]
 line-length = 100
