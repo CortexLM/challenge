@@ -1,4 +1,5 @@
 """Integration tests for full challenge flow."""
+
 import pytest
 from unittest.mock import Mock, AsyncMock, patch
 
@@ -26,4 +27,3 @@ class TestFullChallengeFlow:
         # Test that results can be submitted
         # This requires full setup
         assert True
-

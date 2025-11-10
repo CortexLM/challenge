@@ -1,4 +1,5 @@
 """Unit tests for Public API."""
+
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import Mock, patch
@@ -37,4 +38,3 @@ class TestPublicAPI:
         assert "error" in error_response
         assert error_response["status"] == "error"
         assert error_response["code"] == 400
-

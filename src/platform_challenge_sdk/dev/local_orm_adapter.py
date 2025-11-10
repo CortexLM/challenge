@@ -41,7 +41,7 @@ class LocalORMAdapter:
         from datetime import datetime, date
         from decimal import Decimal
         from uuid import UUID
-        
+
         serialized = {}
         for key, value in row.items():
             if isinstance(value, (datetime, date)):
@@ -90,9 +90,9 @@ class LocalORMAdapter:
                     columns_str = "*"
                     if query.columns:
                         columns_str = ", ".join(f'"{col}"' for col in query.columns)
-                    
-                    sql = f'SELECT {columns_str} FROM {table_name}'
-                    
+
+                    sql = f"SELECT {columns_str} FROM {table_name}"
+
                     # Add WHERE clause
                     where_parts = []
                     params = {}
@@ -107,35 +107,37 @@ class LocalORMAdapter:
                         else:
                             where_parts.append(f'"{filt.column}" {filt.operator} :{param_name}')
                             params[param_name] = filt.value
-                    
+
                     if where_parts:
                         sql += " WHERE " + " AND ".join(where_parts)
-                    
+
                     # Add ORDER BY
                     if query.order_by:
                         order_parts = []
                         for order in query.order_by:
                             order_parts.append(f'"{order.column}" {order.direction}')
                         sql += " ORDER BY " + ", ".join(order_parts)
-                    
+
                     # Add LIMIT and OFFSET
                     if query.limit:
                         sql += f" LIMIT {query.limit}"
                     if query.offset:
                         sql += f" OFFSET {query.offset}"
-                    
+
                     result = await session.execute(text(sql), params)
                     rows_raw = [dict(row._mapping) for row in result]
                     # Serialize rows to make them JSON-serializable
                     rows = [self._serialize_row(row) for row in rows_raw]
                     execution_time = int((time.time() - start_time) * 1000)
-                    
-                    return QueryResult(rows=rows, row_count=len(rows), execution_time_ms=execution_time)
-                
+
+                    return QueryResult(
+                        rows=rows, row_count=len(rows), execution_time_ms=execution_time
+                    )
+
                 elif query.operation == "count":
                     # Build COUNT query
-                    sql = f'SELECT COUNT(*) as count FROM {table_name}'
-                    
+                    sql = f"SELECT COUNT(*) as count FROM {table_name}"
+
                     where_parts = []
                     params = {}
                     for i, filt in enumerate(query.filters):
@@ -146,34 +148,44 @@ class LocalORMAdapter:
                         else:
                             where_parts.append(f'"{filt.column}" {filt.operator} :{param_name}')
                             params[param_name] = filt.value
-                    
+
                     if where_parts:
                         sql += " WHERE " + " AND ".join(where_parts)
-                    
+
                     result = await session.execute(text(sql), params)
                     row = result.fetchone()
                     count = row[0] if row else 0
                     execution_time = int((time.time() - start_time) * 1000)
-                    
-                    return QueryResult(rows=[{"count": count}], row_count=1, execution_time_ms=execution_time)
-                
+
+                    return QueryResult(
+                        rows=[{"count": count}], row_count=1, execution_time_ms=execution_time
+                    )
+
                 elif query.operation == "insert":
                     # Build INSERT query
                     if not query.values:
                         raise ValueError("INSERT requires values")
-                    
+
                     import json
+
                     columns = [cv.column for cv in query.values]
                     values_list = []
-                    jsonb_columns = {"metadata", "validation_errors", "complexity_metrics", "security_patterns", "llm_validation_result", "metrics"}  # Common JSONB columns
-                    
+                    jsonb_columns = {
+                        "metadata",
+                        "validation_errors",
+                        "complexity_metrics",
+                        "security_patterns",
+                        "llm_validation_result",
+                        "metrics",
+                    }  # Common JSONB columns
+
                     for cv in query.values:
                         # Convert dict/list to JSON string for JSONB columns
                         if cv.column in jsonb_columns and isinstance(cv.value, (dict, list)):
                             values_list.append(json.dumps(cv.value))
                         else:
                             values_list.append(cv.value)
-                    
+
                     # Handle JSONB columns - cast to JSONB
                     columns_str = ", ".join(f'"{col}"' for col in columns)
                     placeholders = []
@@ -182,35 +194,37 @@ class LocalORMAdapter:
                             placeholders.append(f"CAST(:val_{i} AS JSONB)")
                         else:
                             placeholders.append(f":val_{i}")
-                    
+
                     placeholders_str = ", ".join(placeholders)
                     params = {f"val_{i}": val for i, val in enumerate(values_list)}
-                    
-                    sql = f'INSERT INTO {table_name} ({columns_str}) VALUES ({placeholders_str}) RETURNING *'
-                    
+
+                    sql = f"INSERT INTO {table_name} ({columns_str}) VALUES ({placeholders_str}) RETURNING *"
+
                     result = await session.execute(text(sql), params)
                     row = result.fetchone()
                     inserted_row_raw = dict(row._mapping) if row else {}
                     # Serialize to make JSON-serializable
                     inserted_row = self._serialize_row(inserted_row_raw) if inserted_row_raw else {}
                     execution_time = int((time.time() - start_time) * 1000)
-                    
-                    return QueryResult(rows=[inserted_row], row_count=1, execution_time_ms=execution_time)
-                
+
+                    return QueryResult(
+                        rows=[inserted_row], row_count=1, execution_time_ms=execution_time
+                    )
+
                 elif query.operation == "update":
                     # Build UPDATE query
                     if not query.set_values:
                         raise ValueError("UPDATE requires set_values")
-                    
+
                     set_parts = []
                     params = {}
                     for i, cv in enumerate(query.set_values):
                         param_name = f"set_{i}"
                         set_parts.append(f'"{cv.column}" = :{param_name}')
                         params[param_name] = cv.value
-                    
+
                     sql = f'UPDATE {table_name} SET {", ".join(set_parts)}'
-                    
+
                     # Add WHERE clause
                     where_parts = []
                     for i, filt in enumerate(query.filters):
@@ -221,24 +235,26 @@ class LocalORMAdapter:
                         else:
                             where_parts.append(f'"{filt.column}" {filt.operator} :{param_name}')
                             params[param_name] = filt.value
-                    
+
                     if where_parts:
                         sql += " WHERE " + " AND ".join(where_parts)
-                    
+
                     sql += " RETURNING *"
-                    
+
                     result = await session.execute(text(sql), params)
                     rows_raw = [dict(row._mapping) for row in result]
                     # Serialize rows to make them JSON-serializable
                     rows = [self._serialize_row(row) for row in rows_raw]
                     execution_time = int((time.time() - start_time) * 1000)
-                    
-                    return QueryResult(rows=rows, row_count=len(rows), execution_time_ms=execution_time)
-                
+
+                    return QueryResult(
+                        rows=rows, row_count=len(rows), execution_time_ms=execution_time
+                    )
+
                 elif query.operation == "delete":
                     # Build DELETE query
-                    sql = f'DELETE FROM {table_name}'
-                    
+                    sql = f"DELETE FROM {table_name}"
+
                     where_parts = []
                     params = {}
                     for i, filt in enumerate(query.filters):
@@ -249,18 +265,20 @@ class LocalORMAdapter:
                         else:
                             where_parts.append(f'"{filt.column}" {filt.operator} :{param_name}')
                             params[param_name] = filt.value
-                    
+
                     if where_parts:
                         sql += " WHERE " + " AND ".join(where_parts)
                     else:
                         # Safety: don't allow DELETE without WHERE
                         raise ValueError("DELETE without filters is not allowed")
-                    
+
                     result = await session.execute(text(sql), params)
                     execution_time = int((time.time() - start_time) * 1000)
-                    
-                    return QueryResult(rows=[], row_count=result.rowcount or 0, execution_time_ms=execution_time)
-                
+
+                    return QueryResult(
+                        rows=[], row_count=result.rowcount or 0, execution_time_ms=execution_time
+                    )
+
                 else:
                     raise ValueError(f"Unsupported operation: {query.operation}")
             except Exception as e:
@@ -355,4 +373,3 @@ class LocalORMAdapter:
             schema=self.schema_name,
         )
         return await self.execute_query(query)
-

@@ -25,7 +25,7 @@ def evaluate(ctx: Context, payload: dict) -> dict:
     job_type = "inference"
     logs = ["Processing started", "Model loaded", "Inference completed"]
     allowed_log_containers = ["model-checkpoint"]
-    
+
     return {
         "score": score,
         "metrics": metrics,
@@ -40,18 +40,18 @@ def on_weights(jobs: list[dict]) -> dict[str, float]:
     # Custom weights calculation
     weights = {}
     total_score = 0.0
-    
+
     for j in jobs:
         uid = str(j.get("uid"))
         score = float(j.get("score", 0.0))
         total_score += score
         weights[uid] = score
-    
+
     # Apply custom normalization if needed
     if total_score > 0:
         for uid in weights:
             weights[uid] = weights[uid] / total_score
-    
+
     return weights
 
 
@@ -62,7 +62,7 @@ async def upload_artefact(request):
     return {
         "artefact_id": f"art-{token_info['job_id']}",
         "size": len(data),
-        "uploaded_by": token_info['miner_hotkey'],
+        "uploaded_by": token_info["miner_hotkey"],
     }
 
 
@@ -73,4 +73,3 @@ def cleanup(ctx: Context):
 
 if __name__ == "__main__":
     run()
-

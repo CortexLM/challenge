@@ -1,4 +1,5 @@
 """Unit tests for ORM Bridge."""
+
 import pytest
 from unittest.mock import Mock, AsyncMock, patch
 
@@ -59,4 +60,3 @@ class TestORMPermissions:
         write_ops = ["insert", "update", "delete"]
         for op in write_ops:
             assert op in write_ops
-

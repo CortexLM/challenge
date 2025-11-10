@@ -28,4 +28,3 @@ def test_context():
     assert ctx.job_id == "job1"
     assert ctx.challenge_id == "ch1"
     assert ctx.validator_hotkey == "hotkey"
-

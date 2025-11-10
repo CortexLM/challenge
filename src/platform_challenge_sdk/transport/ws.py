@@ -85,26 +85,26 @@ async def verify_validator_quote(
     challenge_env_mode: str,
 ) -> dict[str, Any]:
     """Verify validator TDX quote for mutual attestation.
-    
+
     Returns:
         dict with 'valid' (bool) and optional 'error' (str)
     """
     import logging
-    
+
     try:
         # Decode quote
         val_quote_bytes = base64.b64decode(val_quote_b64)
-        
+
         # Structural validation: quote must be at least 1024 bytes
         if len(val_quote_bytes) < 1024:
             return {
                 "valid": False,
                 "error": f"Validator quote too short: {len(val_quote_bytes)} bytes (minimum 1024)",
             }
-        
+
         # Verify nonce binding: report_data must match SHA256(nonce)
         expected_report_data = hashlib.sha256(nonce).digest()[:32]
-        
+
         # Check report_data at common TDX quote offsets
         candidate_offsets = [568, 576, 584]
         matched = False
@@ -114,19 +114,21 @@ async def verify_validator_quote(
                 if rd == expected_report_data:
                     matched = True
                     break
-        
+
         if not matched:
             return {
                 "valid": False,
                 "error": "Validator quote report_data does not match nonce (nonce binding failed)",
             }
-        
+
         # Verify environment mode isolation (dev/prod)
         if val_event_log:
             try:
-                event_log_dict = json.loads(val_event_log) if isinstance(val_event_log, str) else val_event_log
+                event_log_dict = (
+                    json.loads(val_event_log) if isinstance(val_event_log, str) else val_event_log
+                )
                 val_env_mode = None
-                
+
                 # Check for environment_mode in event_log
                 if isinstance(event_log_dict, dict):
                     val_env_mode = event_log_dict.get("environment_mode")
@@ -134,7 +136,7 @@ async def verify_validator_quote(
                         # Try to extract from dev_mode flag
                         if event_log_dict.get("dev_mode"):
                             val_env_mode = "dev"
-                
+
                 # Verify environment match (dev cannot connect to prod and vice versa)
                 if val_env_mode and val_env_mode != challenge_env_mode:
                     return {
@@ -143,7 +145,7 @@ async def verify_validator_quote(
                     }
             except Exception as e:
                 logging.warning(f"Failed to parse validator event_log for environment check: {e}")
-        
+
         # In production, attempt cryptographic verification if dcap-qvl is available
         if not dev_mode:
             try:
@@ -156,10 +158,12 @@ async def verify_validator_quote(
                 logging.warning(f"Could not perform full cryptographic verification: {e}")
                 # Structural validation passed, continue
         else:
-            logging.info("DEV MODE: Validator quote structure validated (cryptographic verification skipped)")
-        
+            logging.info(
+                "DEV MODE: Validator quote structure validated (cryptographic verification skipped)"
+            )
+
         return {"valid": True}
-        
+
     except Exception as e:
         return {
             "valid": False,
@@ -180,7 +184,7 @@ async def serve_ws(websocket, path: str, quote_provider) -> None:
 
         nonce_hex = begin["nonce"]
         val_x25519_pub_b64 = begin["val_x25519_pub"]
-        
+
         # Extract validator quote for mutual attestation
         val_quote_b64 = begin.get("val_quote")
         val_event_log = begin.get("val_event_log")
@@ -197,9 +201,10 @@ async def serve_ws(websocket, path: str, quote_provider) -> None:
 
         # 1) Verify validator quote (mutual attestation)
         import os
+
         dev_mode = os.getenv("SDK_DEV_MODE", "").lower() == "true"
         env_mode = os.getenv("ENVIRONMENT_MODE", "dev" if dev_mode else "prod")
-        
+
         if val_quote_b64:
             # Validate validator quote structure and environment
             validation_result = await verify_validator_quote(
@@ -210,15 +215,17 @@ async def serve_ws(websocket, path: str, quote_provider) -> None:
                 dev_mode,
                 env_mode,
             )
-            
+
             if not validation_result["valid"]:
                 error_msg = validation_result.get("error", "Validator quote verification failed")
                 logging.error(f"Validator quote verification failed: {error_msg}")
                 await websocket.send_text(
-                    json.dumps({
-                        "type": "attestation_reject",
-                        "reason": error_msg,
-                    })
+                    json.dumps(
+                        {
+                            "type": "attestation_reject",
+                            "reason": error_msg,
+                        }
+                    )
                 )
                 return
             else:
@@ -226,16 +233,22 @@ async def serve_ws(websocket, path: str, quote_provider) -> None:
         else:
             # In production, validator quote is required
             if not dev_mode:
-                logging.error("Security error: Validator quote required for mutual attestation in production")
+                logging.error(
+                    "Security error: Validator quote required for mutual attestation in production"
+                )
                 await websocket.send_text(
-                    json.dumps({
-                        "type": "attestation_reject",
-                        "reason": "Validator quote required for mutual attestation",
-                    })
+                    json.dumps(
+                        {
+                            "type": "attestation_reject",
+                            "reason": "Validator quote required for mutual attestation",
+                        }
+                    )
                 )
                 return
             else:
-                logging.warning("DEV MODE: Validator quote not provided (mutual attestation skipped)")
+                logging.warning(
+                    "DEV MODE: Validator quote not provided (mutual attestation skipped)"
+                )
 
         # 2) Generate challenge X25519 keypair and quote
         chal_sk = secrets.token_bytes(32)
@@ -266,7 +279,10 @@ async def serve_ws(websocket, path: str, quote_provider) -> None:
         if event_log and isinstance(event_log, str):
             try:
                 import json as json_lib
-                event_log_dict = json_lib.loads(event_log) if isinstance(event_log, str) else event_log
+
+                event_log_dict = (
+                    json_lib.loads(event_log) if isinstance(event_log, str) else event_log
+                )
                 if isinstance(event_log_dict, dict):
                     event_log_dict["environment_mode"] = env_mode
                     event_log = json_lib.dumps(event_log_dict)
@@ -276,7 +292,7 @@ async def serve_ws(websocket, path: str, quote_provider) -> None:
                     event_log = json.dumps({"environment_mode": env_mode, "original": event_log})
                 else:
                     event_log = json.dumps({"environment_mode": env_mode})
-        
+
         # FastAPI/Starlette WebSocket API uses send_text() instead of send()
         await websocket.send_text(
             json.dumps(
@@ -479,9 +495,7 @@ async def serve_ws(websocket, path: str, quote_provider) -> None:
                 else None
             )
             if schema_name:
-                logging.info(
-                    f"Platform-api schema: {schema_name} (SDK will not store or use this)"
-                )
+                logging.info(f"Platform-api schema: {schema_name} (SDK will not store or use this)")
             else:
                 logging.warning(
                     "WARNING: orm_ready signal missing schema name (non-fatal, platform-api will set schema per query)"

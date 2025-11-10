@@ -1,4 +1,5 @@
 """Unit tests for WebSocket Transport."""
+
 import pytest
 import json
 import base64
@@ -105,7 +106,9 @@ class TestVerifyValidatorQuote:
         )
 
         assert result["valid"] is False
-        assert "size" in result.get("error", "").lower() or "length" in result.get("error", "").lower()
+        assert (
+            "size" in result.get("error", "").lower() or "length" in result.get("error", "").lower()
+        )
 
     @pytest.mark.asyncio
     async def test_verify_validator_quote_environment_mismatch(self):
@@ -142,4 +145,3 @@ class TestVerifyValidatorQuote:
 
         # In dev mode, valid structure should pass
         assert result["valid"] is True
-

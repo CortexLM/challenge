@@ -1,4 +1,5 @@
 """Mock TDX client for testing."""
+
 import base64
 import json
 
@@ -21,4 +22,3 @@ class MockTdxClient:
             "event_log": json.dumps(self.mock_event_log),
             "rtmrs": ["0" * 96] * 4,
         }
-

@@ -172,10 +172,12 @@ class SecureORMClient:
             query.schema = self.schema
 
         # Send ORM query message (query_id will be added automatically by SecureWebSocketClient)
-        response = await self.ws_client.send_message({
-            "type": "orm_query",
-            "query": query.to_dict(),
-        })
+        response = await self.ws_client.send_message(
+            {
+                "type": "orm_query",
+                "query": query.to_dict(),
+            }
+        )
 
         if response.get("type") == "orm_result":
             return QueryResult.from_dict(response.get("result", {}))

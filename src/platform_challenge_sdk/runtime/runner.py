@@ -34,13 +34,15 @@ async def _run_async_server() -> None:
         db_manager = await init_local_db_if_needed()
         if db_manager:
             logger.info("🔧 DEV MODE: Using local database connection")
-            
+
             # Create local ORM adapter and set it on challenge
             challenge_id = os.getenv("CHALLENGE_ID", "term-challenge")
             db_version = challenge.db_version or 1
             schema_name = f"{challenge_id}_v{db_version}"
-            
-            permissions = challenge.orm_permissions if challenge.orm_permissions else ORMPermissions()
+
+            permissions = (
+                challenge.orm_permissions if challenge.orm_permissions else ORMPermissions()
+            )
             local_adapter = LocalORMAdapter(
                 db_manager=db_manager,
                 permissions=permissions,
@@ -49,7 +51,7 @@ async def _run_async_server() -> None:
             )
             challenge._server_orm_adapter = local_adapter
             logger.info(f"🔧 DEV MODE: Local ORM adapter initialized for schema '{schema_name}'")
-            
+
             # Call on_orm_ready() automatically in dev mode
             if challenge.orm_ready_handler:
                 try:

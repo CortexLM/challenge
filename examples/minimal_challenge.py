@@ -31,4 +31,3 @@ def on_weights(jobs: list[dict]) -> dict[str, float]:
 
 if __name__ == "__main__":
     run()
-
