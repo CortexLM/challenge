@@ -42,7 +42,7 @@ The Challenge SDK operates as a bridge between two main components of the Platfo
 │  │                            │                             │
 │  │  ┌──────────────────────┐  │                             │
 │  │  │  WebSocket Server   │  │                             │
-│  │  │  (X25519/XChaCha20) │  │                             │
+│  │  │  (X25519/ChaCha20)  │  │                             │
 │  │  └──────────────────────┘  │                             │
 │  │                            │                             │
 │  │  ┌──────────────────────┐  │                             │
@@ -127,7 +127,7 @@ The Platform Validator coordinates agent evaluation and mining:
 - **`values/`**: Key-value storage client
 - **`results/`**: Result submission client
 - **`weights/`**: Default weights calculator
-- **`transport/`**: WebSocket transport with X25519/XChaCha20-Poly1305 encryption
+- **`transport/`**: WebSocket transport with X25519/ChaCha20-Poly1305 encryption
 - **`websocket/`**: WebSocket client utilities
 
 ## Communication Flow

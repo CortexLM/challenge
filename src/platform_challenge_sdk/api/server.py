@@ -103,7 +103,7 @@ async def init_app(lifecycle_registry: Any, api_registry: Any) -> FastAPI:
 
                 # Dev mode: generate fake quote
                 if dev_mode:
-                    logging.info("🔧 DEV MODE: Generating fake TDX quote (no verification)")
+                    logging.debug("DEV MODE: Generating fake TDX quote (no verification)")
                     # Generate a fake quote of appropriate size (TDX quotes are typically 1000+ bytes)
                     fake_quote = secrets.token_bytes(1024)
                     fake_event_log = '{"dev_mode": true, "compose-hash": "dev-mode-fake"}'
@@ -113,7 +113,7 @@ async def init_app(lifecycle_registry: Any, api_registry: Any) -> FastAPI:
                         "rtmr2": secrets.token_bytes(48).hex(),
                         "rtmr3": secrets.token_bytes(48).hex(),
                     }
-                    logging.info(f"🔧 DEV MODE: Fake quote generated ({len(fake_quote)} bytes)")
+                    logging.debug(f"DEV MODE: Fake quote generated ({len(fake_quote)} bytes)")
                     return fake_quote, fake_event_log, fake_rtmrs
 
                 # Production mode: use real TDX quote

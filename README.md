@@ -25,7 +25,7 @@ A modern, secure, and developer-friendly Python SDK for building verifiable chal
 
 ## Features
 
-- **End-to-End Security**: Encrypted WebSocket communication with TDX attestation (X25519/XChaCha20-Poly1305), Ed25519 signed requests, and encrypted credential management.
+- **End-to-End Security**: Encrypted WebSocket communication with TDX attestation (X25519/ChaCha20-Poly1305), Ed25519 signed requests, and encrypted credential management.
 
 - **Lifecycle Management**: Decorator-based handlers for startup, ready, job evaluation, and cleanup.
 

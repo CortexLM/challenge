@@ -36,12 +36,12 @@ def derive_aead_key(
 
 
 def get_tls_materials() -> dict[str, str]:
-    """Deprecated: mTLS removed in favor of X25519/XChaCha20-Poly1305 encryption."""
+    """Deprecated: mTLS removed in favor of X25519/ChaCha20-Poly1305 encryption."""
     return {}
 
 
 def bootstrap_attested_session(base_url: str, validator_hotkey: str) -> Any:
-    """Bootstrap secure session with TDX attestation and X25519/XChaCha20-Poly1305 encryption.
+    """Bootstrap secure session with TDX attestation and X25519/ChaCha20-Poly1305 encryption.
 
     Generates Ed25519 ephemeral keypair for signatures and X25519 keypair for encryption.
     Uses secrets.token_bytes() which calls os.urandom() on Linux/devices.

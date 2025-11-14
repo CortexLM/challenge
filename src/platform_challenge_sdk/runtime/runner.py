@@ -92,7 +92,7 @@ async def _run_async_server() -> None:
 async def _run_async(ctx: Context) -> None:
     """Async runtime logic."""
     _register_lifecycle_defaults()
-    # mTLS server removed - encryption now handled via X25519/XChaCha20-Poly1305
+    # mTLS server removed - encryption now handled via X25519/ChaCha20-Poly1305
 
 
 def run() -> None:

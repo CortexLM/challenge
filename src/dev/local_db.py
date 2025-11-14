@@ -49,7 +49,7 @@ async def run_dev_migrations(dsn: str) -> None:
     from ..challenge.decorators import challenge
 
     # Get challenge name from CHALLENGE_ID env var or default
-    challenge_name = os.getenv("CHALLENGE_ID", "coding-benchmark")
+    challenge_name = os.getenv("CHALLENGE_ID", "terminal-challenge")
 
     # Get db_version from challenge registry
     db_version = challenge.db_version

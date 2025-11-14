@@ -12,7 +12,7 @@ class SigningSession:
     secret_key: bytes
     session_token: str | None = None
     expires_at: int | None = None
-    aead_key: bytes | None = None  # XChaCha20-Poly1305 key for body encryption
+    aead_key: bytes | None = None  # ChaCha20-Poly1305 key for body encryption
     sdk_x25519_sk: bytes | None = None  # SDK X25519 secret key
 
 

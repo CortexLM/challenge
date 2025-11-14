@@ -20,7 +20,7 @@
 │     └─ Derive AEAD key using HKDF                          │
 │                                                             │
 │  3. Encrypted Communication:                                 │
-│     ├─ All messages encrypted with XChaCha20-Poly1305       │
+│     ├─ All messages encrypted with ChaCha20-Poly1305        │
 │     ├─ Nonce unique per message (12 bytes)                 │
 │     └─ Forward secrecy via ephemeral keys                  │
 │                                                             │
@@ -49,10 +49,10 @@ Hardware-backed attestation for TEE (Trusted Execution Environment) deployment v
 
 ### Encrypted WebSocket
 
-X25519 key exchange with XChaCha20-Poly1305 AEAD encryption for all messages:
+X25519 key exchange with ChaCha20-Poly1305 AEAD encryption for all messages:
 
 - **Key Exchange**: X25519 Diffie-Hellman key exchange for forward secrecy
-- **AEAD Encryption**: XChaCha20-Poly1305 authenticated encryption
+- **AEAD Encryption**: ChaCha20-Poly1305 authenticated encryption
 - **Unique Nonces**: 12-byte nonce per message to prevent reuse
 - **HKDF**: HKDF-SHA256 for secure key derivation
 
