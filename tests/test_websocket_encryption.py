@@ -1,4 +1,4 @@
-"""Tests for WebSocket encryption using X25519/XChaCha20-Poly1305."""
+"""Tests for WebSocket encryption using X25519/ChaCha20-Poly1305."""
 
 import pytest
 import asyncio
